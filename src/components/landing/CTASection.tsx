@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import RoleSelector from "./RoleSelector";
 const CTASection = () => {
   const { toast } = useToast();
@@ -63,8 +62,10 @@ const CTASection = () => {
     setIsSubmitting(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('send-consultation-email', {
-        body: {
+      const response = await fetch("/api/consultation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           name: formData.name.trim(),
           email: formData.email.trim(),
           phone: formData.phone.trim(),
@@ -72,22 +73,29 @@ const CTASection = () => {
           timeline: formData.timeline,
           hiringLocation: formData.hiringLocation.trim(),
           salaryBudget: formData.salaryBudget.trim(),
-          comment: formData.comment.trim()
-        }
+          comment: formData.comment.trim(),
+        }),
       });
 
-      if (error) {
-        throw error;
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.success === false) {
+        throw new Error(payload.error || "Failed to submit consultation request");
       }
 
-      if (data?.success === false) {
-        throw new Error(data?.error || "Failed to send consultation request");
+      if (payload.emailSent === false) {
+        toast({
+          title: "Request Saved",
+          description: payload.emailError
+            ? `Saved, but email failed: ${payload.emailError}`
+            : "Saved to database, but notification email failed. Check SMTP settings.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Request Submitted!",
+          description: "We'll connect you with verified talent shortly.",
+        });
       }
-
-      toast({
-        title: "Request Submitted!",
-        description: "We'll connect you with verified talent shortly."
-      });
 
       // Reset form
       setFormData({
